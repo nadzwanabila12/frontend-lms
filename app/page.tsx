@@ -1,0 +1,98 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
+import { auth } from "../firebase";
+
+export default function Home() {
+  // Ingatan untuk menyimpan data siswa yang sedang login (dilengkapi pelindung <any>)
+  const [user, setUser] = useState<any>(null);
+
+  // Fungsi untuk memunculkan pop-up Google Login
+  const loginDenganGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      setUser(result.user); // Simpan data siswa (nama, email) setelah berhasil login
+    } catch (error) {
+      console.error("Gagal login:", error);
+      alert("Gagal memunculkan akun Google. Pastikan internet lancar dan coba lagi!");
+    }
+  };
+
+  // Fungsi untuk Logout (keluar)
+  const logout = async () => {
+    await signOut(auth);
+    setUser(null);
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
+      <div className="max-w-4xl mx-auto space-y-8">
+        
+        {/* Header dengan Tombol Login */}
+        <header className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h1 className="text-3xl font-bold text-blue-600 tracking-tight">LMS Matematika</h1>
+          
+          {/* Jika user sudah login, tampilkan namanya. Jika belum, tampilkan tombol login */}
+          {user ? (
+            <div className="flex items-center gap-4 bg-blue-50 px-4 py-2 rounded-xl border border-blue-100">
+              <div className="text-right">
+                <p className="text-sm font-bold text-gray-800">Halo, {user?.displayName} 👋</p>
+                <p className="text-xs text-gray-500">{user?.email}</p>
+              </div>
+              <button 
+                onClick={logout}
+                className="bg-white text-red-500 border border-red-200 font-bold px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 transition text-sm shadow-sm"
+              >
+                Keluar
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={loginDenganGoogle}
+              className="bg-blue-600 text-white font-bold px-6 py-2.5 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center gap-2"
+            >
+              Masuk dengan Google
+            </button>
+          )}
+        </header>
+
+        {/* Konten Utama Modul */}
+        <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Materi Pembelajaran</h2>
+          
+          <div className="border border-blue-100 rounded-xl p-6 bg-blue-50/30">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Matematika - Kelas 8</h3>
+                <p className="text-blue-600 font-medium">Persamaan Garis Lurus (PGL)</p>
+              </div>
+              <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Modul Utama</span>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm font-bold text-gray-700 mb-2">Target Kompetensi:</p>
+              <ul className="text-sm text-gray-600 space-y-1.5 list-disc list-inside">
+                <li>Menganalisis bentuk grafik <code className="bg-gray-100 px-1 rounded text-blue-600">y = mx + c</code></li>
+                <li>Menghitung nilai gradien (kemiringan) garis</li>
+                <li>Pendekatan Computational Thinking & Analisis Kasus</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link href="/materi-visual" className="flex-1 text-center bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-sm">
+                Mulai Materi Visual
+              </Link>
+              <Link href="/latihan-soal" className="flex-1 text-center bg-white text-blue-600 font-bold py-3 rounded-lg hover:bg-gray-50 transition border-2 border-blue-100">
+                Latihan Soal
+              </Link>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  );
+}
