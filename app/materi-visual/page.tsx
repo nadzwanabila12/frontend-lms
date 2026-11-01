@@ -1,11 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { db, auth } from "../../firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+
+// Komponen khusus untuk merender pecahan vertikal (atas-bawah)
+const Pecahan = ({ atas, bawah, warnaGaris = "border-current" }: { atas: React.ReactNode, bawah: React.ReactNode, warnaGaris?: string }) => (
+  <span className="inline-flex flex-col items-center justify-center align-middle mx-1 font-bold text-sm">
+    <span className={`border-b-[1.5px] ${warnaGaris} px-1 w-full text-center leading-tight pb-0.5`}>{atas}</span>
+    <span className="px-1 text-center leading-tight pt-0.5">{bawah}</span>
+  </span>
+);
 
 export default function MateriVisual() {
+  const router = useRouter();
+  
+  // State untuk menyimpan data siswa yang login
+  const [user, setUser] = useState<any>(null);
+  const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
+  const [statusSimpan, setStatusSimpan] = useState("");
+
   // Ini adalah "ingatan" untuk menyimpan jawaban apa yang diklik siswa
   const [jawaban, setJawaban] = useState("");
+  
+  // Ini "ingatan" baru untuk sistem pengunci Latihan Soal (Prasyarat Dosen)
+  const [sudahSelesai, setSudahSelesai] = useState(false);
+
+  // Mengecek status login saat halaman dimuat
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fungsi untuk menyimpan progres lalu pindah ke halaman soal
+  const tanganiLanjut = async () => {
+    if (user) {
+      setSedangMenyimpan(true);
+      setStatusSimpan("Menyimpan riwayat belajarmu...");
+      try {
+        await addDoc(collection(db, "progres_materi"), {
+          nama: user.displayName,
+          email: user.email,
+          materi: "Bab 1 - Persamaan Garis Lurus",
+          statusTontonVideo: "Selesai",
+          jawabanMisiDetektif: jawaban || "Tidak Menjawab", // Merekam jawaban yang dipilih siswa
+          statusMisiDetektif: jawaban === "1/2" ? "Benar" : "Salah/Lewati", // Mengecek apakah jawabannya tepat
+          waktuPenyelesaian: serverTimestamp()
+        });
+        router.push("/latihan-soal");
+      } catch (error) {
+        console.error("Gagal menyimpan progres:", error);
+        setStatusSimpan("Gagal menyimpan, coba lagi.");
+        setSedangMenyimpan(false);
+      }
+    } else {
+      // Jika siswa masuk sebagai tamu (tidak login), langsung pindah halaman tanpa merekam
+      router.push("/latihan-soal");
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
@@ -21,6 +78,34 @@ export default function MateriVisual() {
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Bab 1: Persamaan Garis Lurus</h1>
           <p className="text-gray-500">Mari bereksperimen dengan titik, garis, dan tingkat kemiringan!</p>
         </header>
+
+        {/* Peringatan jika belum login */}
+        {!user && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-xl shadow-sm">
+            <p className="font-bold text-sm">Peringatan: Kamu belum Login!</p>
+            <p className="text-xs">Kamu bisa melihat materi ini, tetapi progres dan riwayat belajarmu tidak akan terekam ke sistem Guru.</p>
+          </div>
+        )}
+
+        {/* ---------------- VIDEO PEMBELAJARAN ---------------- */}
+        <section className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            🎥 Video Pengantar Konsep
+          </h2>
+          <div className="aspect-video w-full rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-gray-100 relative mb-4">
+            <iframe 
+              className="w-full h-full absolute top-0 left-0"
+              src="https://www.youtube.com/embed/v5xshTktATQ" 
+              title="Video Pembelajaran PGL" 
+              frameBorder="0" 
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+              allowFullScreen
+            ></iframe>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            <strong>Instruksi:</strong> Tonton video pengantar di atas hingga selesai untuk memahami konsep dasar Persamaan Garis Lurus sebelum kamu mulai memecahkan studi kasus hari ini!
+          </p>
+        </section>
 
         {/* Bagian 1: Studi Kasus */}
         <section className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-r-2xl shadow-sm">
@@ -197,24 +282,73 @@ export default function MateriVisual() {
                 m = 4
               </button>
             </div>
-
+            
             {/* Kotak Pesan Hasil Umpan Balik */}
             {jawaban === "1/2" && (
-              <div className="mt-6 p-4 bg-green-500/20 border border-green-400/50 rounded-lg text-green-50 text-sm">
-                <strong>🎉 Tepat sekali!</strong> Karena selisih tegaknya (2) dibagi selisih mendatarnya (4), maka 2/4 disederhanakan menjadi 1/2. Garis y = 1/2x akan tepat mengenai titik sasaran (4, 2).
+              <div className="mt-6 p-4 bg-green-500/20 border border-green-400/50 rounded-lg text-green-50 text-sm leading-relaxed">
+                <strong>🎉 Tepat sekali!</strong> Karena selisih tegaknya (2) dibagi selisih mendatarnya (4), maka <Pecahan atas="2" bawah="4" warnaGaris="border-green-50" /> disederhanakan menjadi <Pecahan atas="1" bawah="2" warnaGaris="border-green-50" />. Garis y = <Pecahan atas="1" bawah="2" warnaGaris="border-green-50" />x akan tepat mengenai titik sasaran (4, 2).
               </div>
             )}
             
             {(jawaban === "2" || jawaban === "4") && (
-              <div className="mt-6 p-4 bg-red-500/20 border border-red-400/50 rounded-lg text-red-50 text-sm">
-                <strong>😅 Wah, grafiknya meleset!</strong> Coba ingat lagi rumusnya: m = selisih tegak dibagi selisih mendatar. Artinya 2 dibagi 4, bukan 4 dibagi 2 ya! Coba hitung ulang.
+              <div className="mt-6 p-4 bg-red-500/20 border border-red-400/50 rounded-lg text-red-50 text-sm leading-relaxed">
+                <strong>😅 Wah, grafiknya meleset!</strong> Coba ingat lagi rumusnya: m = selisih tegak dibagi selisih mendatar. Artinya <Pecahan atas="2" bawah="4" warnaGaris="border-red-50" /> bukan <Pecahan atas="4" bawah="2" warnaGaris="border-red-50" /> ya! Coba hitung ulang.
               </div>
             )}
 
           </div>
-          <p className="text-xs text-indigo-200 italic">
-            *Atau, kamu juga bisa membuktikannya menggunakan rumus selisih tegak & mendatar di Langkah ke-2 tadi!
-          </p>
+          
+          {/* Kalimat Penjelas */}
+          <div className="text-xs text-indigo-200 italic mt-4 flex items-center flex-wrap gap-1">
+            <span>*Atau, kamu juga bisa membuktikannya secara manual dengan rumus</span>
+            <span className="inline-flex items-center gap-1 font-bold bg-white/10 px-2 py-1 rounded">
+              <span>m =</span>
+              <Pecahan atas="y₂ - y₁" bawah="x₂ - x₁" warnaGaris="border-indigo-200" />
+            </span>
+            <span>seperti pada bagian Algoritma di atas!</span>
+          </div>
+        </section>
+
+        {/* ---------------- SISTEM PENGUNCI SOAL & MEREKAM KE FIREBASE ---------------- */}
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-10">
+          <div className="bg-yellow-50 border border-yellow-200 p-4 md:p-5 rounded-xl mb-6">
+            <label className="flex items-start md:items-center gap-3 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="w-6 h-6 mt-0.5 md:mt-0 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                onChange={(e) => setSudahSelesai(e.target.checked)}
+              />
+              <span className="text-gray-700 font-medium text-sm md:text-base leading-snug">
+                Saya menyatakan telah selesai menonton video pembelajaran, membaca materi, dan menyelesaikan misi eksplorasi dengan saksama.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-end items-center gap-4">
+            
+            {/* Indikator Status Penyimpanan */}
+            {statusSimpan && <span className="text-sm font-bold text-blue-600 mr-2">{statusSimpan}</span>}
+            
+            {sudahSelesai ? (
+              <button 
+                onClick={tanganiLanjut}
+                disabled={sedangMenyimpan}
+                className="text-center bg-blue-600 text-white font-bold px-8 py-3.5 rounded-xl hover:bg-blue-700 transition shadow-md w-full sm:w-auto disabled:opacity-50"
+              >
+                {sedangMenyimpan ? "Merekam..." : "Lanjut ke Latihan Soal \u2192"}
+              </button>
+            ) : (
+              <button disabled className="text-center bg-gray-200 text-gray-400 font-bold px-8 py-3.5 rounded-xl cursor-not-allowed w-full sm:w-auto">
+                Lanjut ke Latihan Soal &rarr;
+              </button>
+            )}
+          </div>
+          
+          {!sudahSelesai && (
+            <p className="text-right text-xs text-red-500 font-semibold mt-3">
+              * Centang kotak konfirmasi di atas terlebih dahulu untuk membuka kunci soal latihan.
+            </p>
+          )}
         </section>
 
       </div>
