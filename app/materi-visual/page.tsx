@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, auth } from "../../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
 // Komponen khusus untuk merender pecahan vertikal (atas-bawah)
@@ -29,6 +29,10 @@ export default function MateriVisual() {
   // Ini "ingatan" baru untuk sistem pengunci Latihan Soal (Prasyarat Dosen)
   const [sudahSelesai, setSudahSelesai] = useState(false);
 
+  // State baru untuk Fitur Diskusi
+  const [pesanBaru, setPesanBaru] = useState("");
+  const [daftarDiskusi, setDaftarDiskusi] = useState<any[]>([]);
+
   // Mengecek status login saat halaman dimuat
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -36,6 +40,33 @@ export default function MateriVisual() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Efek memuat data Diskusi secara real-time dari Firestore
+  useEffect(() => {
+    const q = query(collection(db, "diskusi_siswa"), orderBy("waktu", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setDaftarDiskusi(data);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fungsi kirim pesan Diskusi
+  const kirimPesan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pesanBaru.trim()) return;
+    
+    try {
+      await addDoc(collection(db, "diskusi_siswa"), {
+        nama: user?.displayName || "Siswa 7C", 
+        pesan: pesanBaru,
+        waktu: serverTimestamp()
+      });
+      setPesanBaru("");
+    } catch (error) {
+      console.error("Error mengirim pesan:", error);
+    }
+  };
 
   // Fungsi untuk menyimpan progres lalu pindah ke halaman soal
   const tanganiLanjut = async () => {
@@ -48,8 +79,8 @@ export default function MateriVisual() {
           email: user.email,
           materi: "Bab 1 - Persamaan Garis Lurus",
           statusTontonVideo: "Selesai",
-          jawabanMisiDetektif: jawaban || "Tidak Menjawab", // Merekam jawaban yang dipilih siswa
-          statusMisiDetektif: jawaban === "1/2" ? "Benar" : "Salah/Lewati", // Mengecek apakah jawabannya tepat
+          jawabanMisiDetektif: jawaban || "Tidak Menjawab", 
+          statusMisiDetektif: jawaban === "1/2" ? "Benar" : "Salah/Lewati", 
           waktuPenyelesaian: serverTimestamp()
         });
         router.push("/latihan-soal");
@@ -59,7 +90,6 @@ export default function MateriVisual() {
         setSedangMenyimpan(false);
       }
     } else {
-      // Jika siswa masuk sebagai tamu (tidak login), langsung pindah halaman tanpa merekam
       router.push("/latihan-soal");
     }
   };
@@ -307,6 +337,45 @@ export default function MateriVisual() {
             </span>
             <span>seperti pada bagian Algoritma di atas!</span>
           </div>
+        </section>
+
+        {/* ---------------- FITUR DISKUSI SISWA ---------------- */}
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-10">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">💬 Ruang Diskusi Kelas</h2>
+          
+          {/* Kotak riwayat chat */}
+          <div className="h-64 overflow-y-auto mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+            {daftarDiskusi.length === 0 ? (
+              <p className="text-gray-400 text-center italic mt-20">Belum ada diskusi, jadilah yang pertama bertanya!</p>
+            ) : (
+              daftarDiskusi.map((chat) => (
+                <div key={chat.id} className="mb-3 border-b pb-2 last:border-0 border-gray-200">
+                  <span className="font-bold text-blue-600 mr-2">{chat.nama}:</span>
+                  <span className="text-gray-700">{chat.pesan}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Form input pesan */}
+          <form onSubmit={kirimPesan} className="flex gap-2">
+            <input 
+              type="text" 
+              value={pesanBaru}
+              onChange={(e) => setPesanBaru(e.target.value)}
+              placeholder="Ketik pertanyaan atau diskusikan analisis GeoGebra-mu di sini..." 
+              className="flex-1 border-2 border-gray-300 p-3 rounded-lg focus:outline-none focus:border-blue-500 bg-white text-gray-700"
+              disabled={!user}
+            />
+            <button 
+              type="submit" 
+              disabled={!user}
+              className="bg-blue-600 font-bold text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Kirim
+            </button>
+          </form>
+          {!user && <p className="text-xs text-red-500 mt-2 font-semibold">*Kamu harus Login ke Dashboard terlebih dahulu untuk bisa ikut berdiskusi.</p>}
         </section>
 
         {/* ---------------- SISTEM PENGUNCI SOAL & MEREKAM KE FIREBASE ---------------- */}
