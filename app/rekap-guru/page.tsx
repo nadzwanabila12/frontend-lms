@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { db } from "../../firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import * as XLSX from "xlsx";
 
 export default function RekapGuru() {
   const [dataProgres, setDataProgres] = useState<any[]>([]);
@@ -19,7 +20,7 @@ export default function RekapGuru() {
         const progres = snapshotProgres.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setDataProgres(progres);
 
-        // Ambil data nilai latihan soal (jika koleksinya sudah ada)
+        // Ambil data nilai latihan soal
         const qNilai = query(collection(db, "nilai_latihan"), orderBy("waktuPengerjaan", "desc"));
         const snapshotNilai = await getDocs(qNilai);
         const nilai = snapshotNilai.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -35,6 +36,43 @@ export default function RekapGuru() {
     ambilData();
   }, []);
 
+  // Fungsi untuk mengunduh data menjadi file Excel
+  const unduhExcel = () => {
+    // 1. Merapikan data untuk Sheet Progres Materi
+    const barisProgres = dataProgres.map((item, index) => ({
+      "No": index + 1,
+      "Nama Siswa": item.nama || "Tanpa Nama",
+      "Email": item.email || "-",
+      "Status Video": item.statusTontonVideo || "Selesai",
+      "Jawaban Misi": item.jawabanMisiDetektif || "-",
+      "Hasil Misi": item.statusMisiDetektif || "-",
+      "Waktu Selesai": item.waktuPenyelesaian ? new Date(item.waktuPenyelesaian.seconds * 1000).toLocaleString('id-ID') : "-"
+    }));
+
+    // 2. Merapikan data untuk Sheet Nilai Latihan
+    const barisNilai = dataNilai.map((item, index) => ({
+      "No": index + 1,
+      "Nama Siswa": item.nama || "Tanpa Nama",
+      "Email": item.email || "-",
+      "Jumlah Benar": item.jumlahBenar || 0,
+      "Jumlah Salah": item.jumlahSalah || 0,
+      "Skor Akhir": item.skor || 0,
+      "Waktu Pengerjaan": item.waktuPengerjaan ? new Date(item.waktuPengerjaan.seconds * 1000).toLocaleString('id-ID') : "-"
+    }));
+
+    // 3. Membuat lembar kerja (Worksheet)
+    const sheetProgres = XLSX.utils.json_to_sheet(barisProgres);
+    const sheetNilai = XLSX.utils.json_to_sheet(barisNilai);
+
+    // 4. Menyatukan lembar kerja ke dalam satu file Excel (Workbook)
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheetProgres, "Progres Materi");
+    XLSX.utils.book_append_sheet(workbook, sheetNilai, "Nilai Latihan");
+
+    // 5. Mengunduh file ke laptop
+    XLSX.writeFile(workbook, "Rekap_LMS_Kelas_7C.xlsx");
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -45,9 +83,19 @@ export default function RekapGuru() {
             <h1 className="text-2xl font-bold text-gray-800">📊 Dasbor Rekapitulasi Guru</h1>
             <p className="text-gray-500 text-sm mt-1">Pantau progres belajar dan nilai latihan siswa secara real-time.</p>
           </div>
-          <Link href="/" className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-semibold px-5 py-2.5 rounded-xl transition text-center text-sm">
-            Kembali ke Beranda
-          </Link>
+          <div className="flex gap-3">
+            {/* Tombol Download Excel */}
+            <button 
+              onClick={unduhExcel}
+              disabled={loading}
+              className="bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-5 py-2.5 rounded-xl transition text-center text-sm flex items-center justify-center gap-2"
+            >
+              📥 Download Excel
+            </button>
+            <Link href="/" className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-semibold px-5 py-2.5 rounded-xl transition text-center text-sm flex items-center justify-center">
+              Kembali ke Beranda
+            </Link>
+          </div>
         </header>
 
         {loading ? (
